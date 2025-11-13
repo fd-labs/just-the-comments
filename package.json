@@ -1,8 +1,10 @@
 {
   "name": "just-the-comments",
+  "homepage": "https://fd-labs.github.io/just-the-comments",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
