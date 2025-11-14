@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect } from 'react'
 import Navbar from './components/Navbar'
 import CommentsTable from './components/CommentsTable'
 import { saveAs } from 'file-saver'
-import { Container, Typography, Box, Button, Fab, Select, MenuItem, Checkbox, ListItemText, FormControl, InputLabel, OutlinedInput, Menu, Snackbar, Alert, ButtonGroup, ThemeProvider, createTheme, CssBaseline } from '@mui/material'
+import { Container, Typography, Box, Button, Fab, Select, MenuItem, Checkbox, ListItemText, FormControl, InputLabel, OutlinedInput, Menu, Snackbar, Alert, ButtonGroup, IconButton, ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import { CloudUpload as CloudUploadIcon, KeyboardArrowUp as KeyboardArrowUpIcon, ArrowDropDown as ArrowDropDownIcon, ContentCopy as ContentCopyIcon, Save as SaveIcon, Clear as ClearIcon } from '@mui/icons-material'
 import type { GridRowSelectionModel } from '@mui/x-data-grid'
 
@@ -29,130 +29,32 @@ function formatDate(ts?: string): string {
   return new Date(ts).toISOString();
 }
 
-// Copy button component with format options
-function CopyButton({ onCopyText, onCopyCSV, disabled }: {
-  onCopyText: () => void,
-  onCopyCSV: () => void,
-  disabled: boolean
-}) {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
-  
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-  
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-  
-  const handleCopyText = () => {
-    onCopyText();
-    handleClose();
-  };
-  
-  const handleCopyCSV = () => {
-    onCopyCSV();
-    handleClose();
-  };
-
-  return (
-    <>
-      <Button
-        startIcon={<ContentCopyIcon />}
-        endIcon={<ArrowDropDownIcon />}
-        onClick={handleClick}
-        disabled={disabled}
-      >
-        Copy
-      </Button>
-      <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-        <MenuItem onClick={handleCopyText}>
-          Copy as text
-        </MenuItem>
-        <MenuItem onClick={handleCopyCSV}>
-          Copy as table
-        </MenuItem>
-      </Menu>
-    </>
-  );
-}
-
-// Save button component with format options
-function SaveButton({ onSaveCSV, onSaveTXT, disabled }: {
-  onSaveCSV: () => void,
-  onSaveTXT: () => void,
-  disabled: boolean
-}) {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
-  
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-  
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-  
-  const handleSaveCSV = () => {
-    onSaveCSV();
-    handleClose();
-  };
-  
-  const handleSaveTXT = () => {
-    onSaveTXT();
-    handleClose();
-  };
-
-  return (
-    <>
-      <Button
-        startIcon={<SaveIcon />}
-        endIcon={<ArrowDropDownIcon />}
-        onClick={handleClick}
-        disabled={disabled}
-      >
-        Save
-      </Button>
-      <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-        <MenuItem onClick={handleSaveTXT}>
-          Save as text file
-        </MenuItem>
-        <MenuItem onClick={handleSaveCSV}>
-          Save as CSV file
-        </MenuItem>
-      </Menu>
-    </>
-  );
-}
-
 const COLUMN_FIELDS = ['Page', 'Author', 'Modified', 'Comment'];
 
 // Column selector component
-function ColumnSelector({ columnVisibility, setColumnVisibility }: { 
-  columnVisibility: { [key: string]: boolean }, 
-  setColumnVisibility: (vis: { [key: string]: boolean }) => void 
+function ColumnSelector({ columnVisibility, setColumnVisibility }: {
+  columnVisibility: { [key: string]: boolean },
+  setColumnVisibility: (vis: { [key: string]: boolean }) => void
 }) {
   const selectedColumns = Object.keys(columnVisibility).filter(key => columnVisibility[key]);
 
   const handleChange = (event: any) => {
     const value = event.target.value;
     const newVisibility = { ...columnVisibility };
-    
+
     // Reset all to false
     Object.keys(newVisibility).forEach(key => {
       newVisibility[key] = false;
     });
-    
+
     // Set selected ones to true
     value.forEach((field: string) => {
       newVisibility[field] = true;
     });
-    
+
     // Always ensure "Comment" column is selected
     newVisibility.Comment = true;
-    
+
     setColumnVisibility(newVisibility);
   };
 
@@ -169,8 +71,8 @@ function ColumnSelector({ columnVisibility, setColumnVisibility }: {
       >
         {COLUMN_FIELDS.map((field) => (
           <MenuItem key={field} value={field} disabled={field === 'Comment'}>
-            <Checkbox 
-              checked={selectedColumns.indexOf(field) > -1} 
+            <Checkbox
+              checked={selectedColumns.indexOf(field) > -1}
               disabled={field === 'Comment'}
             />
             <ListItemText primary={field} />
@@ -202,6 +104,8 @@ function App() {
   const [columnVisibility, setColumnVisibility] = useState<{ [key: string]: boolean }>(DEFAULT_COLUMNS);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [noCommentsWarning, setNoCommentsWarning] = useState<boolean>(false);
+  const [copyMenuAnchor, setCopyMenuAnchor] = useState<null | HTMLElement>(null);
+  const [saveMenuAnchor, setSaveMenuAnchor] = useState<null | HTMLElement>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode');
@@ -250,12 +154,12 @@ function App() {
     const selectedFields = Object.keys(columnVisibility)
       .filter((col) => columnVisibility[col] && col !== '__check__');
     if (selectedFields.length === 0) return;
-    
+
     // Filter comments to only include selected rows
-    const selectedComments = selectedRows.length > 0 
+    const selectedComments = selectedRows.length > 0
       ? selectedRows.map(index => comments[index]).filter(Boolean)
       : comments; // If none selected, export all
-      
+
     // Helper function to escape CSV field only when necessary
     const escapeCSVField = (value: string, fieldName: string) => {
       if (!value) return '';
@@ -269,7 +173,7 @@ function App() {
       }
       return value;
     };
-      
+
     const rows = selectedComments.map((c) =>
       selectedFields
         .map((field) => escapeCSVField((c as any)[field]?.toString() || "", field))
@@ -277,7 +181,7 @@ function App() {
     );
     const csv = [selectedFields.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    
+
     // Remove file extension from filename and add _comments suffix
     const baseFileName = fileName ? fileName.replace(/\.[^/.]+$/, '') : "file";
     const filename = `${baseFileName}_comments.csv`;
@@ -290,33 +194,33 @@ function App() {
     const selectedFields = Object.keys(columnVisibility)
       .filter((col) => columnVisibility[col] && col !== '__check__');
     if (selectedFields.length === 0) return "";
-    
+
     // Filter comments to only include selected rows
-    const selectedComments = selectedRows.length > 0 
+    const selectedComments = selectedRows.length > 0
       ? selectedRows.map(index => comments[index]).filter(Boolean)
       : comments; // If none selected, export all
-    
+
     const lines = selectedComments.map((c) => {
       const parts = [];
-      
+
       // Add page if selected
       if (selectedFields.includes('Page')) {
         parts.push(`P${c.Page}`);
       }
-      
+
       // Add author if selected
       if (selectedFields.includes('Author') && c.Author) {
         parts.push(c.Author);
       }
-      
+
       // Add modified if selected
       if (selectedFields.includes('Modified') && c.Modified) {
         parts.push(c.Modified);
       }
-      
+
       // Format the prefix (everything before the comment)
       const prefix = parts.length > 0 ? parts.join(', ') : '';
-      
+
       // Add comment with appropriate formatting
       if (selectedFields.includes('Comment')) {
         if (prefix) {
@@ -328,16 +232,16 @@ function App() {
         return prefix;
       }
     });
-    
+
     return lines.join('\n\n');
   }, [comments, selectedRows, columnVisibility]);
 
   const saveTXT = useCallback(() => {
     const text = formatTextContent();
     if (!text) return;
-    
+
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    
+
     // Remove file extension from filename and add _comments suffix
     const baseFileName = fileName ? fileName.replace(/\.[^/.]+$/, '') : "file";
     const filename = `${baseFileName}_comments.txt`;
@@ -347,7 +251,7 @@ function App() {
   const copyToClipboard = useCallback(async () => {
     const text = formatTextContent();
     if (!text) return;
-    
+
     try {
       await navigator.clipboard.writeText(text);
       setCopySuccess(true);
@@ -363,19 +267,19 @@ function App() {
     const selectedFields = Object.keys(columnVisibility)
       .filter((col) => columnVisibility[col] && col !== '__check__');
     if (selectedFields.length === 0) return;
-    
+
     // Filter comments to only include selected rows
-    const selectedComments = selectedRows.length > 0 
+    const selectedComments = selectedRows.length > 0
       ? selectedRows.map(index => comments[index]).filter(Boolean)
       : comments; // If none selected, export all
-      
+
     // Helper function to properly escape TSV fields with newlines
     const escapeTSVField = (value: string) => {
       if (!value) return '""'; // Empty quoted field
       // Always quote fields, and preserve actual newlines for Excel
       return `"${value.replace(/"/g, '""')}"`;
     };
-      
+
     // Create TSV with proper newline handling
     const header = selectedFields.map(field => escapeTSVField(field)).join("\t");
     const rows = selectedComments.map((c) =>
@@ -384,7 +288,7 @@ function App() {
         .join("\t")
     );
     const tsv = [header, ...rows].join("\n");
-    
+
     try {
       // Use simple TSV approach with proper quoting for multi-line content
       await navigator.clipboard.writeText(tsv);
@@ -408,7 +312,7 @@ function App() {
 
   const handleFileSelect = useCallback(async (file: File | null) => {
     if (!file) return;
-    
+
     setFile(file);
     setError("");
     setComments([]);
@@ -429,7 +333,7 @@ function App() {
 
           // Only process text annotations
           if (subtype !== 'Text') continue;
-          
+
           // Handle different content formats from PDF.js
           let contents = "";
           if (typeof a.contents === 'string') {
@@ -455,7 +359,7 @@ function App() {
               contents = JSON.stringify(a.contentsObj);
             }
           }
-          
+
           // Extract author from various possible properties
           let author = "";
           if (a.titleObj && a.titleObj.str) {
@@ -472,10 +376,10 @@ function App() {
           } else if (a.userName) {
             author = a.userName;
           }
-          
+
           const mod = a.modificationDate || a.modDate || a.modified || "";
-          
-          
+
+
           if (contents && contents.trim()) {
             found.push({
               Page: pageNum,
@@ -527,7 +431,7 @@ function App() {
       e.preventDefault();
       dragCounter = 0;
       setIsDragOverlay(false);
-      
+
       const droppedFile = e.dataTransfer?.files[0];
       if (droppedFile) {
         handleFileSelect(droppedFile);
@@ -578,68 +482,31 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Navbar darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <Navbar 
+          darkMode={darkMode} 
+          onToggleDarkMode={toggleDarkMode}
+          onUploadClick={handleClick}
+        />
 
-      {/* Main Content */}
-      <Container maxWidth="md" sx={{ mt: 2 }}>
-        <Typography variant="body1" sx={{ mt: 1, textAlign: 'center', fontWeight: 500 }}>
-          📝 Extract comments from your PDF documents. 🔒 100% private.{' '}
-          <Box 
-            component="a" 
-            href="https://github.com/fd-labs/just-the-comments#readme" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            sx={{ 
-              color: 'primary.main', 
-              textDecoration: 'none',
-              '&:hover': { textDecoration: 'underline' }
-            }}
-          >
-            Learn more.
-          </Box>
-        </Typography>
+        {/* Main Content - Scrollable */}
+        <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+          <Container maxWidth="md" sx={{ pt: 0.5, pb: 2 }}>
 
-        {/* Always-visible Toolbar */}
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-
-
-          {/* Export/Copy buttons - always visible */}
-          <ButtonGroup>
-          
-          {/* File management */}
-          <Button
-            startIcon={<CloudUploadIcon />}
-            onClick={handleClick}
-          >
-            Upload PDF
-          </Button>
-            <CopyButton
-              onCopyText={copyToClipboard}
-              onCopyCSV={copyCSVToClipboard}
-              disabled={comments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
-            />
-            <SaveButton
-              onSaveCSV={saveCSV}
-              onSaveTXT={saveTXT}
-              disabled={comments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
-            />
-            <Button
-              color='error'
-              startIcon={<ClearIcon />}
-              onClick={unloadFile}
-              disabled={!file && comments.length === 0}
-            >
-              Clear
-            </Button>
-          </ButtonGroup>
-        </Box>
-
-        {/* Filename display - centered below toolbar */}
+        {/* Filename display */}
         {file && (
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body1" color="textSecondary">
-              <Box component="span" sx={{ fontWeight: 500 }}>Loaded file: {fileName}</Box>
+          <Box sx={{ mt: 2, textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="textSecondary">
+              {fileName}
             </Typography>
+            <IconButton
+              size="small"
+              onClick={unloadFile}
+              title="Clear file"
+              sx={{ p: 0.5 }}
+            >
+              <ClearIcon fontSize="small" />
+            </IconButton>
           </Box>
         )}
 
@@ -655,19 +522,47 @@ function App() {
             {/* Content Area - Upload UI OR Table */}
             {!file && comments.length === 0 ? (
               /* Initial Upload UI */
-              <Box sx={{ mt: 4, textAlign: 'center' }}>
-                {/* <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<CloudUploadIcon />}
-                  onClick={handleClick}
-                  sx={{ px: 4, py: 2 }}
-                >
-                  Upload PDF Document
-                </Button> */}
-                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
-                  Upload a PDF document or drag and drop anywhere on this page
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body1" sx={{ mb: 4, mt: 5, fontWeight: 500 }}>
+                  📝 Extract comments from your PDF documents. 🔒 100% private.{' '}
+                  <Box
+                    component="a"
+                    href="https://github.com/fd-labs/just-the-comments#readme"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      color: 'primary.main',
+                      textDecoration: 'none',
+                      '&:hover': { textDecoration: 'underline' }
+                    }}
+                  >
+                    Learn more.
+                  </Box>
                 </Typography>
+                <Box 
+                  sx={{ 
+                    border: '2px dashed',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    p: 6,
+                    backgroundColor: 'action.hover',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      backgroundColor: 'action.selected',
+                    }
+                  }}
+                  onClick={handleClick}
+                >
+                  <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="h6" color="textPrimary" sx={{ mb: 1 }}>
+                    Upload a PDF document
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    or drag and drop anywhere on this page
+                  </Typography>
+                </Box>
               </Box>
             ) : (
               /* Results/Table Area */
@@ -685,18 +580,63 @@ function App() {
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="h6">
                         Found {comments.length} comment{comments.length !== 1 ? 's' : ''}
-                        {selectedRows.length > 0 
-                            ? ` (${selectedRows.length} selected)`
-                            : ''
-                          }
+                        {selectedRows.length > 0
+                          ? ` (${selectedRows.length} selected)`
+                          : ''
+                        }
                       </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ButtonGroup variant="outlined">
+                        <Button
+                          startIcon={<ContentCopyIcon />}
+                          endIcon={<ArrowDropDownIcon />}
+                          onClick={(e) => setCopyMenuAnchor(e.currentTarget)}
+                          disabled={comments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
+                        >
+                          Copy
+                        </Button>
+                        <Button
+                          startIcon={<SaveIcon />}
+                          endIcon={<ArrowDropDownIcon />}
+                          onClick={(e) => setSaveMenuAnchor(e.currentTarget)}
+                          disabled={comments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
+                        >
+                          Save
+                        </Button>
+                      </ButtonGroup>
+                      <Menu 
+                        anchorEl={copyMenuAnchor} 
+                        open={Boolean(copyMenuAnchor)} 
+                        onClose={() => setCopyMenuAnchor(null)}
+                      >
+                        <MenuItem onClick={() => { copyToClipboard(); setCopyMenuAnchor(null); }}>
+                          Copy as text
+                        </MenuItem>
+                        <MenuItem onClick={() => { copyCSVToClipboard(); setCopyMenuAnchor(null); }}>
+                          Copy as table
+                        </MenuItem>
+                      </Menu>
+                      <Menu 
+                        anchorEl={saveMenuAnchor} 
+                        open={Boolean(saveMenuAnchor)} 
+                        onClose={() => setSaveMenuAnchor(null)}
+                      >
+                        <MenuItem onClick={() => { saveTXT(); setSaveMenuAnchor(null); }}>
+                          Save as text file
+                        </MenuItem>
+                        <MenuItem onClick={() => { saveCSV(); setSaveMenuAnchor(null); }}>
+                          Save as CSV file
+                        </MenuItem>
+                      </Menu>
+                      
                       <ColumnSelector
                         columnVisibility={columnVisibility}
                         setColumnVisibility={setColumnVisibility}
                       />
+                      </Box>
                     </Box>
-                    <CommentsTable 
-                      comments={comments} 
+                    <CommentsTable
+                      comments={comments}
                       loading={loading}
                       onSelectionChange={handleSelectionChange}
                       columnVisibility={columnVisibility}
@@ -766,8 +706,8 @@ function App() {
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         sx={{ mt: 8 }} // Add margin-top to clear the navbar
       >
-        <Alert 
-          onClose={() => setCopySuccess(false)} 
+        <Alert
+          onClose={() => setCopySuccess(false)}
           severity="success"
           variant='filled'
           sx={{ width: '100%' }}
@@ -784,8 +724,8 @@ function App() {
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         sx={{ mt: 8 }} // Add margin-top to clear the navbar
       >
-        <Alert 
-          onClose={() => setNoCommentsWarning(false)} 
+        <Alert
+          onClose={() => setNoCommentsWarning(false)}
           severity="error"
           variant='filled'
           sx={{ width: '100%' }}
@@ -795,28 +735,26 @@ function App() {
       </Snackbar>
 
       {/* Footer */}
-      <Box 
-        component="footer" 
-        sx={{ 
-          mt: 8, 
-          py: 3, 
-          px: 2, 
-          backgroundColor: 'background.paper',
-          borderTop: '1px solid',
-          borderColor: 'divider'
+      <Box
+        component="footer"
+        sx={{
+          mt: 8,
+          py: 3,
+          px: 2,
+          backgroundColor: 'background.paper'
         }}
       >
         <Container maxWidth="md">
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="body2" color="textSecondary">
               Made with ❤️ by{' '}
-              <Box 
-                component="a" 
-                href="https://github.com/fd-labs" 
-                target="_blank" 
+              <Box
+                component="a"
+                href="https://github.com/fd-labs"
+                target="_blank"
                 rel="noopener noreferrer"
-                sx={{ 
-                  color: 'primary.main', 
+                sx={{
+                  color: 'primary.main',
                   textDecoration: 'none',
                   '&:hover': { textDecoration: 'underline' }
                 }}
@@ -824,13 +762,13 @@ function App() {
                 Flow Direction Labs
               </Box>
               {' • '}
-              <Box 
-                component="a" 
-                href="https://github.com/fd-labs/just-the-comments" 
-                target="_blank" 
+              <Box
+                component="a"
+                href="https://github.com/fd-labs/just-the-comments"
+                target="_blank"
                 rel="noopener noreferrer"
-                sx={{ 
-                  color: 'primary.main', 
+                sx={{
+                  color: 'primary.main',
                   textDecoration: 'none',
                   '&:hover': { textDecoration: 'underline' }
                 }}
@@ -840,6 +778,8 @@ function App() {
             </Typography>
           </Box>
         </Container>
+      </Box>
+      </Box>
       </Box>
     </ThemeProvider>
   )
