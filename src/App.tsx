@@ -11,8 +11,10 @@ import "pdfjs-dist/build/pdf.worker.min.mjs";
 
 interface CommentEntry {
   Page: number;
+  Type: string;
   Author: string;
   Comment: string;
+  MarkedText: string;
   Modified: string;
 }
 
@@ -29,7 +31,127 @@ function formatDate(ts?: string): string {
   return new Date(ts).toISOString();
 }
 
-const COLUMN_FIELDS = ['Page', 'Author', 'Modified', 'Comment'];
+const COLUMN_FIELDS = ['Page', 'Type', 'MarkedText', 'Comment', 'Author', 'Modified'];
+
+const MARKUP_TYPES = new Set(['Highlight', 'StrikeOut', 'Underline', 'Squiggly']);
+const SKIP_TYPES = new Set(['Link', 'Widget', 'Popup']);
+
+function getAnnotationType(subtype: string): string {
+  const typeMap: Record<string, string> = {
+    'Text': 'Comment',
+    'Highlight': 'Highlight',
+    'StrikeOut': 'Strikethrough',
+    'Underline': 'Underline',
+    'Squiggly': 'Squiggly',
+    'FreeText': 'Text Box',
+    'Stamp': 'Stamp',
+    'Ink': 'Drawing',
+    'Caret': 'Caret',
+    'Line': 'Line',
+    'Square': 'Rectangle',
+    'Circle': 'Ellipse',
+    'Polygon': 'Polygon',
+    'PolyLine': 'Polyline',
+  };
+  return typeMap[subtype] || subtype || 'Unknown';
+}
+
+function getRectsFromAnnotation(annotation: any): [number, number, number, number][] {
+  const rects: [number, number, number, number][] = [];
+
+  const quadPoints = annotation.quadPoints;
+  if (quadPoints && Array.isArray(quadPoints) && quadPoints.length > 0) {
+    if (Array.isArray(quadPoints[0])) {
+      // Array of arrays
+      for (const quad of quadPoints) {
+        if (quad.length >= 8) {
+          if (typeof quad[0] === 'number') {
+            // Flat numbers: [x1,y1, x2,y2, x3,y3, x4,y4]
+            const xs = [quad[0], quad[2], quad[4], quad[6]];
+            const ys = [quad[1], quad[3], quad[5], quad[7]];
+            rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+          } else if (quad[0] && typeof quad[0] === 'object' && 'x' in quad[0]) {
+            // Array of {x, y} objects
+            const xs = quad.map((p: any) => p.x);
+            const ys = quad.map((p: any) => p.y);
+            rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+          }
+        }
+      }
+    } else if (typeof quadPoints[0] === 'number') {
+      // Flat array of numbers: [x1,y1, x2,y2, ..., x4,y4, x1,y1, ...]
+      for (let i = 0; i + 7 < quadPoints.length; i += 8) {
+        const xs = [quadPoints[i], quadPoints[i+2], quadPoints[i+4], quadPoints[i+6]];
+        const ys = [quadPoints[i+1], quadPoints[i+3], quadPoints[i+5], quadPoints[i+7]];
+        rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+      }
+    } else if (typeof quadPoints[0] === 'object' && 'x' in quadPoints[0]) {
+      // Flat array of {x, y} objects, groups of 4
+      for (let i = 0; i + 3 < quadPoints.length; i += 4) {
+        const pts = quadPoints.slice(i, i + 4);
+        const xs = pts.map((p: any) => p.x);
+        const ys = pts.map((p: any) => p.y);
+        rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+      }
+    }
+  }
+
+  // Fall back to rect if no quadPoints parsed
+  if (rects.length === 0 && annotation.rect) {
+    rects.push([annotation.rect[0], annotation.rect[1], annotation.rect[2], annotation.rect[3]]);
+  }
+
+  return rects;
+}
+
+function extractMarkedTextFromContent(
+  textContent: any,
+  rects: [number, number, number, number][]
+): string {
+  if (!textContent || !rects.length) return "";
+
+  const matchingItems: { text: string; x: number; y: number }[] = [];
+
+  for (const item of textContent.items) {
+    if (!item.str || item.str.trim() === '') continue;
+
+    const tx = item.transform[4];
+    const ty = item.transform[5];
+    const tw = item.width || 0;
+    const th = item.height || (Math.abs(item.transform[3]) || 12);
+
+    // Vertical midpoint of the text item
+    const textMidY = ty + th / 2;
+
+    for (const [rx1, ry1, rx2, ry2] of rects) {
+      // Require the text item's vertical midpoint to fall within the rect
+      // This prevents adjacent-line text from being captured
+      const midInsideY = textMidY >= ry1 && textMidY <= ry2;
+
+      // Require meaningful horizontal overlap (not just touching)
+      const textRight = tx + tw;
+      const overlapLeft = Math.max(tx, rx1);
+      const overlapRight = Math.min(textRight, rx2);
+      const hOverlap = overlapRight - overlapLeft;
+      const overlapX = hOverlap > 0;
+
+      if (midInsideY && overlapX) {
+        // If the text item only partially overlaps horizontally,
+        // we still include the full text item (PDF text items are atomic)
+        matchingItems.push({ text: item.str, x: tx, y: ty });
+        break;
+      }
+    }
+  }
+
+  // Sort by y descending (top-to-bottom in PDF coords) then x ascending (left-to-right)
+  matchingItems.sort((a, b) => {
+    if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+    return a.x - b.x;
+  });
+
+  return matchingItems.map(item => item.text).join(' ').replace(/\s+/g, ' ').trim();
+}
 
 // Column selector component
 function ColumnSelector({ columnVisibility, setColumnVisibility }: {
@@ -85,8 +207,10 @@ function ColumnSelector({ columnVisibility, setColumnVisibility }: {
 
 const DEFAULT_COLUMNS = {
   Page: true,
+  Type: true,
   Author: false,
   Modified: false,
+  MarkedText: true,
   Comment: true,
   __check__: true, // Ensure checkbox column is always visible
 };
@@ -164,7 +288,7 @@ function App() {
     const escapeCSVField = (value: string, fieldName: string) => {
       if (!value) return '';
       // Always quote comments since they're free-form text
-      if (fieldName === 'Comment') {
+      if (fieldName === 'Comment' || fieldName === 'MarkedText') {
         return `"${value.replace(/"/g, '""')}"`;
       }
       // Only quote other fields if they contain comma, quote, or newline
@@ -201,36 +325,36 @@ function App() {
       : comments; // If none selected, export all
 
     const lines = selectedComments.map((c) => {
-      const parts = [];
+      const metaParts = [];
 
-      // Add page if selected
       if (selectedFields.includes('Page')) {
-        parts.push(`P${c.Page}`);
+        metaParts.push(`P${c.Page}`);
       }
-
-      // Add author if selected
+      if (selectedFields.includes('Type') && c.Type) {
+        metaParts.push(`[${c.Type}]`);
+      }
       if (selectedFields.includes('Author') && c.Author) {
-        parts.push(c.Author);
+        metaParts.push(c.Author);
       }
-
-      // Add modified if selected
       if (selectedFields.includes('Modified') && c.Modified) {
-        parts.push(c.Modified);
+        metaParts.push(c.Modified);
       }
 
-      // Format the prefix (everything before the comment)
-      const prefix = parts.length > 0 ? parts.join(', ') : '';
+      const prefix = metaParts.length > 0 ? metaParts.join(', ') : '';
 
-      // Add comment with appropriate formatting
-      if (selectedFields.includes('Comment')) {
-        if (prefix) {
-          return `${prefix} - ${c.Comment}`;
-        } else {
-          return c.Comment;
-        }
-      } else {
-        return prefix;
+      const contentParts = [];
+      if (selectedFields.includes('MarkedText') && c.MarkedText) {
+        contentParts.push(`"${c.MarkedText}"`);
       }
+      if (selectedFields.includes('Comment') && c.Comment) {
+        contentParts.push(c.Comment);
+      }
+
+      const content = contentParts.join(' - ');
+
+      if (prefix && content) return `${prefix} - ${content}`;
+      if (content) return content;
+      return prefix;
     });
 
     return lines.join('\n\n');
@@ -328,35 +452,54 @@ function App() {
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const annots = await page.getAnnotations();
-        for (const a of annots as any[]) {
-          const subtype = a.subtype || a.annotationType || "";
 
-          // Only process text annotations
-          if (subtype !== 'Text') continue;
+        // Pre-fetch text content for this page if any markup annotations exist
+        const hasMarkup = annots.some((a: any) => MARKUP_TYPES.has(a.subtype || ""));
+        let textContent: any = null;
+        if (hasMarkup) {
+          textContent = await page.getTextContent();
+        }
+
+        // Sort annotations by position: top-to-bottom, then left-to-right
+        // PDF coordinates have origin at bottom-left, so higher Y = higher on page
+        const filteredAnnots = (annots as any[])
+          .filter((a: any) => {
+            const subtype = a.subtype || "";
+            return subtype && !SKIP_TYPES.has(subtype);
+          })
+          .sort((a: any, b: any) => {
+            const ay = a.rect ? a.rect[3] : 0; // top edge (max Y)
+            const by = b.rect ? b.rect[3] : 0;
+            const ax = a.rect ? a.rect[0] : 0; // left edge
+            const bx = b.rect ? b.rect[0] : 0;
+            // Higher Y = higher on page, so sort descending by Y, then ascending by X
+            if (Math.abs(ay - by) > 2) return by - ay;
+            return ax - bx;
+          });
+
+        for (const a of filteredAnnots) {
+          const subtype = a.subtype || "";
+
+          const type = getAnnotationType(subtype);
+          const isMarkup = MARKUP_TYPES.has(subtype);
 
           // Handle different content formats from PDF.js
           let contents = "";
           if (typeof a.contents === 'string') {
             contents = a.contents;
           } else if (a.contents && typeof a.contents === 'object') {
-            // Handle object content (like rich text)
-            if (a.contents.str) {
-              contents = a.contents.str;
+            if ('str' in a.contents) {
+              contents = a.contents.str || "";
             } else if (a.contents.text) {
               contents = a.contents.text;
             } else if (Array.isArray(a.contents)) {
               contents = a.contents.join(' ');
-            } else {
-              contents = JSON.stringify(a.contents);
             }
           } else if (a.contentsObj) {
-            // Fallback to contentsObj
             if (typeof a.contentsObj === 'string') {
               contents = a.contentsObj;
-            } else if (a.contentsObj.str) {
-              contents = a.contentsObj.str;
-            } else {
-              contents = JSON.stringify(a.contentsObj);
+            } else if ('str' in a.contentsObj) {
+              contents = a.contentsObj.str || "";
             }
           }
 
@@ -379,12 +522,21 @@ function App() {
 
           const mod = a.modificationDate || a.modDate || a.modified || "";
 
+          // Extract marked text for markup annotations
+          let markedText = "";
+          if (isMarkup && textContent) {
+            const rects = getRectsFromAnnotation(a);
+            markedText = extractMarkedTextFromContent(textContent, rects);
+          }
 
-          if (contents && contents.trim()) {
+          // Include if has comment text or is a markup annotation with marked text
+          if ((contents && contents.trim()) || (isMarkup && markedText)) {
             found.push({
               Page: pageNum,
+              Type: type,
               Author: author,
               Comment: contents.trim(),
+              MarkedText: markedText,
               Modified: formatDate(mod),
             });
           }
@@ -579,7 +731,7 @@ function App() {
                   <Box sx={{ mt: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="h6">
-                        Found {comments.length} comment{comments.length !== 1 ? 's' : ''}
+                        Found {comments.length} annotation{comments.length !== 1 ? 's' : ''}
                         {selectedRows.length > 0
                           ? ` (${selectedRows.length} selected)`
                           : ''

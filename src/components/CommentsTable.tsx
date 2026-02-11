@@ -4,8 +4,10 @@ import { useMemo, useCallback, useEffect } from 'react';
 
 interface CommentEntry {
   Page: number;
+  Type: string;
   Author: string;
   Comment: string;
+  MarkedText: string;
   Modified: string;
 }
 
@@ -24,12 +26,24 @@ const columns: GridColDef<CommentEntry>[] = [
     type: 'number'
   },
   {
-    field: 'Author',
-    width: 150,
+    field: 'Type',
+    headerName: 'Type',
+    width: 130,
   },
   {
-    field: 'Modified',
-    width: 180,
+    field: 'MarkedText',
+    headerName: 'Marked Text',
+    width: 250,
+    renderCell: (params) => (
+      <Box sx={{ 
+        whiteSpace: 'normal', 
+        wordWrap: 'break-word', 
+        lineHeight: 1.4,
+        fontStyle: 'italic',
+      }}>
+        {params.value}
+      </Box>
+    ),
   },
   {
     field: 'Comment',
@@ -45,6 +59,14 @@ const columns: GridColDef<CommentEntry>[] = [
         {params.value}
       </Box>
     ),
+  },
+  {
+    field: 'Author',
+    width: 150,
+  },
+  {
+    field: 'Modified',
+    width: 180,
   },
 ];
 
