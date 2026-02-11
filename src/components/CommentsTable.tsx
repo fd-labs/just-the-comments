@@ -3,6 +3,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-da
 import { useMemo, useCallback, useEffect } from 'react';
 
 interface CommentEntry {
+  No: number;
   Page: number;
   Type: string;
   Author: string;
@@ -20,9 +21,15 @@ interface CommentsTableProps {
 }
 
 const columns: GridColDef<CommentEntry>[] = [
+  {
+    field: 'No',
+    headerName: 'No.',
+    width: 100,
+    type: 'number',
+  },
   { 
     field: 'Page', 
-    width: 90,
+    width: 100,
     type: 'number'
   },
   {

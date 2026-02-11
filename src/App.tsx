@@ -1,15 +1,16 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useMemo } from 'react'
 import Navbar from './components/Navbar'
 import CommentsTable from './components/CommentsTable'
 import { saveAs } from 'file-saver'
-import { Container, Typography, Box, Button, Fab, Select, MenuItem, Checkbox, ListItemText, FormControl, InputLabel, OutlinedInput, Menu, Snackbar, Alert, ButtonGroup, IconButton, ThemeProvider, createTheme, CssBaseline } from '@mui/material'
-import { CloudUpload as CloudUploadIcon, KeyboardArrowUp as KeyboardArrowUpIcon, ArrowDropDown as ArrowDropDownIcon, ContentCopy as ContentCopyIcon, Save as SaveIcon, Clear as ClearIcon } from '@mui/icons-material'
+import { Container, Typography, Box, Button, Fab, Select, MenuItem, Checkbox, ListItemText, FormControl, InputLabel, OutlinedInput, Menu, Snackbar, Alert, ButtonGroup, IconButton, ThemeProvider, createTheme, CssBaseline, Popover, FormControlLabel, Badge, Tooltip } from '@mui/material'
+import { CloudUpload as CloudUploadIcon, KeyboardArrowUp as KeyboardArrowUpIcon, ArrowDropDown as ArrowDropDownIcon, ContentCopy as ContentCopyIcon, Save as SaveIcon, Clear as ClearIcon, FilterAlt as FilterAltIcon } from '@mui/icons-material'
 import type { GridRowSelectionModel } from '@mui/x-data-grid'
 
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/build/pdf.worker.min.mjs";
 
 interface CommentEntry {
+  No: number;
   Page: number;
   Type: string;
   Author: string;
@@ -31,7 +32,17 @@ function formatDate(ts?: string): string {
   return new Date(ts).toISOString();
 }
 
-const COLUMN_FIELDS = ['Page', 'Type', 'MarkedText', 'Comment', 'Author', 'Modified'];
+const COLUMN_FIELDS = ['No', 'Page', 'Type', 'MarkedText', 'Comment', 'Author', 'Modified'];
+
+const COLUMN_LABELS: Record<string, string> = {
+  No: 'No.',
+  Page: 'Page',
+  Type: 'Type',
+  MarkedText: 'Marked Text',
+  Comment: 'Comment',
+  Author: 'Author',
+  Modified: 'Modified',
+};
 
 const MARKUP_TYPES = new Set(['Highlight', 'StrikeOut', 'Underline', 'Squiggly']);
 const SKIP_TYPES = new Set(['Link', 'Widget', 'Popup']);
@@ -182,13 +193,13 @@ function ColumnSelector({ columnVisibility, setColumnVisibility }: {
 
   return (
     <FormControl size="small" sx={{ minWidth: 160 }}>
-      <InputLabel>Select columns</InputLabel>
+      <InputLabel>Columns</InputLabel>
       <Select
         multiple
         autoWidth
         value={selectedColumns}
         onChange={handleChange}
-        input={<OutlinedInput label="Select columns" />}
+        input={<OutlinedInput label="Columns" />}
         renderValue={(selected) => `${selected.length - 1} selected`}
       >
         {COLUMN_FIELDS.map((field) => (
@@ -197,7 +208,7 @@ function ColumnSelector({ columnVisibility, setColumnVisibility }: {
               checked={selectedColumns.indexOf(field) > -1}
               disabled={field === 'Comment'}
             />
-            <ListItemText primary={field} />
+            <ListItemText primary={COLUMN_LABELS[field] || field} />
           </MenuItem>
         ))}
       </Select>
@@ -205,7 +216,9 @@ function ColumnSelector({ columnVisibility, setColumnVisibility }: {
   );
 }
 
+// Type filter component
 const DEFAULT_COLUMNS = {
+  No: true,
   Page: true,
   Type: true,
   Author: false,
@@ -228,6 +241,9 @@ function App() {
   const [columnVisibility, setColumnVisibility] = useState<{ [key: string]: boolean }>(DEFAULT_COLUMNS);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [noCommentsWarning, setNoCommentsWarning] = useState<boolean>(false);
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [hasCommentOnly, setHasCommentOnly] = useState<boolean>(false);
+  const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [copyMenuAnchor, setCopyMenuAnchor] = useState<null | HTMLElement>(null);
   const [saveMenuAnchor, setSaveMenuAnchor] = useState<null | HTMLElement>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -255,23 +271,38 @@ function App() {
     });
   }, []);
 
+  // Compute available types and filtered comments
+  const availableTypes = useMemo(() => {
+    const types = new Set(comments.map(c => c.Type));
+    return Array.from(types).sort();
+  }, [comments]);
+
+  const filteredComments = useMemo(() => {
+    let result = comments;
+    if (selectedTypes.size > 0) {
+      result = result.filter(c => selectedTypes.has(c.Type));
+    }
+    if (hasCommentOnly) {
+      result = result.filter(c => c.Comment.trim() !== '');
+    }
+    return result;
+  }, [comments, selectedTypes, hasCommentOnly]);
+
   const handleSelectionChange = useCallback((selectionModel: GridRowSelectionModel) => {
     if (selectionModel.type === 'include') {
-      // Use the selected ids directly
       const selectedIds = Array.from(selectionModel.ids) as number[];
       setSelectedRows(selectedIds);
     } else if (selectionModel.type === 'exclude') {
-      // Calculate the inverse - all rows except the excluded ones
       const excludedIds = new Set(selectionModel.ids);
       const selectedIds = [];
-      for (let i = 0; i < comments.length; i++) {
+      for (let i = 0; i < filteredComments.length; i++) {
         if (!excludedIds.has(i)) {
           selectedIds.push(i);
         }
       }
       setSelectedRows(selectedIds);
     }
-  }, [comments.length]);
+  }, [filteredComments.length]);
 
   const saveCSV = useCallback(() => {
     // Only include visible columns, excluding UI-only columns
@@ -279,10 +310,9 @@ function App() {
       .filter((col) => columnVisibility[col] && col !== '__check__');
     if (selectedFields.length === 0) return;
 
-    // Filter comments to only include selected rows
     const selectedComments = selectedRows.length > 0
-      ? selectedRows.map(index => comments[index]).filter(Boolean)
-      : comments; // If none selected, export all
+      ? selectedRows.map(index => filteredComments[index]).filter(Boolean)
+      : filteredComments; // If none selected, export all
 
     // Helper function to escape CSV field only when necessary
     const escapeCSVField = (value: string, fieldName: string) => {
@@ -310,7 +340,7 @@ function App() {
     const baseFileName = fileName ? fileName.replace(/\.[^/.]+$/, '') : "file";
     const filename = `${baseFileName}_comments.csv`;
     saveAs(blob, filename);
-  }, [comments, fileName, selectedRows, columnVisibility]);
+  }, [filteredComments, fileName, selectedRows, columnVisibility]);
 
   // Shared function to format text content (DRY principle)
   const formatTextContent = useCallback(() => {
@@ -321,8 +351,8 @@ function App() {
 
     // Filter comments to only include selected rows
     const selectedComments = selectedRows.length > 0
-      ? selectedRows.map(index => comments[index]).filter(Boolean)
-      : comments; // If none selected, export all
+      ? selectedRows.map(index => filteredComments[index]).filter(Boolean)
+      : filteredComments; // If none selected, export all
 
     const lines = selectedComments.map((c) => {
       const metaParts = [];
@@ -358,7 +388,7 @@ function App() {
     });
 
     return lines.join('\n\n');
-  }, [comments, selectedRows, columnVisibility]);
+  }, [filteredComments, selectedRows, columnVisibility]);
 
   const saveTXT = useCallback(() => {
     const text = formatTextContent();
@@ -394,8 +424,8 @@ function App() {
 
     // Filter comments to only include selected rows
     const selectedComments = selectedRows.length > 0
-      ? selectedRows.map(index => comments[index]).filter(Boolean)
-      : comments; // If none selected, export all
+      ? selectedRows.map(index => filteredComments[index]).filter(Boolean)
+      : filteredComments; // If none selected, export all
 
     // Helper function to properly escape TSV fields with newlines
     const escapeTSVField = (value: string) => {
@@ -422,7 +452,7 @@ function App() {
       // For unsupported browsers, show the text in an alert as fallback
       alert('Your browser doesn\'t support clipboard access. Here\'s the data to copy manually:\n\n' + tsv);
     }
-  }, [comments, selectedRows, columnVisibility]);
+  }, [filteredComments, selectedRows, columnVisibility]);
 
   const unloadFile = useCallback(() => {
     setFile(null);
@@ -431,6 +461,8 @@ function App() {
     setError("");
     setLoading(false);
     setSelectedRows([]);
+    setSelectedTypes(new Set());
+    setHasCommentOnly(false);
     // Keep column visibility settings intact
   }, []);
 
@@ -532,6 +564,7 @@ function App() {
           // Include if has comment text or is a markup annotation with marked text
           if ((contents && contents.trim()) || (isMarkup && markedText)) {
             found.push({
+              No: found.length + 1,
               Page: pageNum,
               Type: type,
               Author: author,
@@ -544,6 +577,9 @@ function App() {
       }
 
       setComments(found);
+      // Initialize type filter with all found types selected
+      const foundTypes = new Set(found.map(c => c.Type));
+      setSelectedTypes(foundTypes);
       if (found.length === 0) {
         setNoCommentsWarning(true);
       }
@@ -643,7 +679,7 @@ function App() {
 
         {/* Main Content - Scrollable */}
         <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-          <Container maxWidth="md" sx={{ pt: 0.5, pb: 2 }}>
+          <Container maxWidth="lg" sx={{ pt: 0.5, pb: 2 }}>
 
         {/* Filename display */}
         {file && (
@@ -731,30 +767,92 @@ function App() {
                   <Box sx={{ mt: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="h6">
-                        Found {comments.length} annotation{comments.length !== 1 ? 's' : ''}
+                        Found {filteredComments.length} annotation{filteredComments.length !== 1 ? 's' : ''}
+                        {filteredComments.length !== comments.length
+                          ? ` (of ${comments.length} total)`
+                          : ''
+                        }
                         {selectedRows.length > 0
                           ? ` (${selectedRows.length} selected)`
                           : ''
                         }
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <ButtonGroup variant="outlined">
-                        <Button
-                          startIcon={<ContentCopyIcon />}
-                          endIcon={<ArrowDropDownIcon />}
-                          onClick={(e) => setCopyMenuAnchor(e.currentTarget)}
-                          disabled={comments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
+                      <Tooltip title="Filters">
+                        <IconButton
+                          onClick={(e) => setFilterAnchor(e.currentTarget)}
+                          sx={{ border: 1, borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}
                         >
-                          Copy
-                        </Button>
-                        <Button
-                          startIcon={<SaveIcon />}
-                          endIcon={<ArrowDropDownIcon />}
-                          onClick={(e) => setSaveMenuAnchor(e.currentTarget)}
-                          disabled={comments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
-                        >
-                          Save
-                        </Button>
+                          <Badge color="primary" variant="dot" invisible={!hasCommentOnly && selectedTypes.size === availableTypes.length}>
+                            <FilterAltIcon />
+                          </Badge>
+                        </IconButton>
+                      </Tooltip>
+                      <Popover
+                        open={Boolean(filterAnchor)}
+                        anchorEl={filterAnchor}
+                        onClose={() => setFilterAnchor(null)}
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                      >
+                        <Box sx={{ p: 2, minWidth: 200 }}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={hasCommentOnly}
+                                onChange={(e) => setHasCommentOnly(e.target.checked)}
+                              />
+                            }
+                            label="Has comment only"
+                          />
+                          <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, color: 'text.secondary' }}>
+                            Annotation types
+                          </Typography>
+                          {availableTypes.map((type) => (
+                            <FormControlLabel
+                              key={type}
+                              control={
+                                <Checkbox
+                                  checked={selectedTypes.has(type)}
+                                  onChange={() => {
+                                    const next = new Set(selectedTypes);
+                                    if (next.has(type)) {
+                                      next.delete(type);
+                                    } else {
+                                      next.add(type);
+                                    }
+                                    setSelectedTypes(next);
+                                  }}
+                                />
+                              }
+                              label={type}
+                              sx={{ display: 'block' }}
+                            />
+                          ))}
+                        </Box>
+                      </Popover>
+                      <ColumnSelector
+                        columnVisibility={columnVisibility}
+                        setColumnVisibility={setColumnVisibility}
+                      />
+                      <ButtonGroup variant="outlined" sx={{ height: 40 }}>
+                        <Tooltip title="Copy">
+                          <Button
+                            endIcon={<ArrowDropDownIcon />}
+                            onClick={(e) => setCopyMenuAnchor(e.currentTarget)}
+                            disabled={filteredComments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
+                          >
+                            <ContentCopyIcon />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="Save">
+                          <Button
+                            endIcon={<ArrowDropDownIcon />}
+                            onClick={(e) => setSaveMenuAnchor(e.currentTarget)}
+                            disabled={filteredComments.length === 0 || Object.values(columnVisibility).every(visible => !visible)}
+                          >
+                            <SaveIcon />
+                          </Button>
+                        </Tooltip>
                       </ButtonGroup>
                       <Menu 
                         anchorEl={copyMenuAnchor} 
@@ -780,15 +878,10 @@ function App() {
                           Save as CSV file
                         </MenuItem>
                       </Menu>
-                      
-                      <ColumnSelector
-                        columnVisibility={columnVisibility}
-                        setColumnVisibility={setColumnVisibility}
-                      />
                       </Box>
                     </Box>
                     <CommentsTable
-                      comments={comments}
+                      comments={filteredComments}
                       loading={loading}
                       onSelectionChange={handleSelectionChange}
                       columnVisibility={columnVisibility}

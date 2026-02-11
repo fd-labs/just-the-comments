@@ -63,6 +63,9 @@ export default function Navbar({ darkMode, onToggleDarkMode, onUploadClick }: Na
             >
               Upload PDF
             </Button>
+            <Typography variant="body2" sx={{ ml: 1, opacity: 0.7 }}>
+              (or drag &amp; drop a PDF anywhere)
+            </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
             <Box component="span" sx={{ mr: 0.5 }}>🔒</Box>
