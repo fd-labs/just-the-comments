@@ -1,6 +1,9 @@
 import Box from '@mui/material/Box';
-import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
-import { useMemo, useCallback, useEffect } from 'react';
+import Tooltip from '@mui/material/Tooltip';
+import TextField from '@mui/material/TextField';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { DataGrid, type GridColDef, type GridRowSelectionModel, useGridApiContext } from '@mui/x-data-grid';
+import { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 
 interface CommentEntry {
   No: number;
@@ -16,8 +19,60 @@ interface CommentsTableProps {
   comments: CommentEntry[];
   loading?: boolean;
   onSelectionChange?: (selectionModel: GridRowSelectionModel) => void;
+  onCommentEdit?: (index: number, newComment: string) => void;
   columnVisibility: { [key: string]: boolean };
   setColumnVisibility: (vis: { [key: string]: boolean }) => void;
+}
+
+function MultilineEditCell(props: any) {
+  const { id, field, value } = props;
+  const apiRef = useGridApiContext();
+  const [editValue, setEditValue] = useState(value || '');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Focus and place cursor at end
+    if (inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.selectionStart = inputRef.current.value.length;
+    }
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      apiRef.current.stopCellEditMode({ id, field });
+    } else if (e.key === 'Enter' && e.shiftKey) {
+      e.stopPropagation();
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setEditValue(newValue);
+    apiRef.current.setEditCellValue({ id, field, value: newValue });
+  };
+
+  return (
+    <TextField
+      inputRef={inputRef}
+      multiline
+      fullWidth
+      variant="standard"
+      value={editValue}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
+      sx={{
+        '& .MuiInputBase-root': {
+          padding: '12px',
+          alignItems: 'flex-start',
+        },
+        '& .MuiInput-underline:before': { borderBottom: 'none' },
+        '& .MuiInput-underline:after': { borderBottom: 'none' },
+      }}
+    />
+  );
 }
 
 const columns: GridColDef<CommentEntry>[] = [
@@ -56,10 +111,20 @@ const columns: GridColDef<CommentEntry>[] = [
     field: 'Comment',
     flex: 1,
     minWidth: 300,
-    hideable: false, // Prevent hiding the Comment column
+    hideable: false,
+    editable: true,
+    renderEditCell: (params) => <MultilineEditCell {...params} />,
+    renderHeader: () => (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <span>Comment</span>
+        <Tooltip title="Double-click to edit. Shift+Enter for new line. Enter to save, Escape to cancel." placement="top">
+          <InfoOutlinedIcon sx={{ fontSize: 18, opacity: 0.5 }} />
+        </Tooltip>
+      </Box>
+    ),
     renderCell: (params) => (
       <Box sx={{ 
-        whiteSpace: 'normal', 
+        whiteSpace: 'pre-wrap', 
         wordWrap: 'break-word', 
         lineHeight: 1.4,
       }}>
@@ -77,7 +142,7 @@ const columns: GridColDef<CommentEntry>[] = [
   },
 ];
 
-export default function CommentsTable({ comments, loading = false, onSelectionChange, columnVisibility, setColumnVisibility }: CommentsTableProps) {
+export default function CommentsTable({ comments, loading = false, onSelectionChange, onCommentEdit, columnVisibility, setColumnVisibility }: CommentsTableProps) {
   // Inject global CSS to hide checkbox selection in column management
   useEffect(() => {
     const style = document.createElement('style');
@@ -112,10 +177,17 @@ export default function CommentsTable({ comments, loading = false, onSelectionCh
     const updatedModel = { 
       ...model, 
       Comment: true,
-      __check__: true // This is the internal field name for the checkbox column
+      __check__: true
     };
     setColumnVisibility(updatedModel);
   }, [setColumnVisibility]);
+
+  const processRowUpdate = useCallback((newRow: any, oldRow: any) => {
+    if (newRow.Comment !== oldRow.Comment && onCommentEdit) {
+      onCommentEdit(newRow.id, newRow.Comment);
+    }
+    return newRow;
+  }, [onCommentEdit]);
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -127,6 +199,7 @@ export default function CommentsTable({ comments, loading = false, onSelectionCh
         checkboxSelection
         onRowSelectionModelChange={handleSelectionChange}
         onColumnVisibilityModelChange={handleColumnVisibilityChange}
+        processRowUpdate={processRowUpdate}
         disableRowSelectionOnClick
         hideFooter
         disableVirtualization={false}

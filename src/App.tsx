@@ -304,6 +304,18 @@ function App() {
     }
   }, [filteredComments.length]);
 
+  const handleCommentEdit = useCallback((filteredIndex: number, newComment: string) => {
+    // Find the original comment using the No field (1-based index into original array)
+    const editedEntry = filteredComments[filteredIndex];
+    if (!editedEntry) return;
+    const originalIndex = editedEntry.No - 1;
+    setComments(prev => {
+      const updated = [...prev];
+      updated[originalIndex] = { ...updated[originalIndex], Comment: newComment };
+      return updated;
+    });
+  }, [filteredComments]);
+
   const saveCSV = useCallback(() => {
     // Only include visible columns, excluding UI-only columns
     const selectedFields = Object.keys(columnVisibility)
@@ -884,6 +896,7 @@ function App() {
                       comments={filteredComments}
                       loading={loading}
                       onSelectionChange={handleSelectionChange}
+                      onCommentEdit={handleCommentEdit}
                       columnVisibility={columnVisibility}
                       setColumnVisibility={setColumnVisibility}
                     />
