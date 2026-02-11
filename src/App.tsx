@@ -703,7 +703,15 @@ function App() {
               size="small"
               onClick={unloadFile}
               title="Clear file"
-              sx={{ p: 0.5 }}
+              sx={{ 
+                p: 0.5,
+                color: 'error.light',
+                opacity: 0.7,
+                '&:hover': {
+                  opacity: 1,
+                  backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                },
+              }}
             >
               <ClearIcon fontSize="small" />
             </IconButton>
