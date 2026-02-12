@@ -71,35 +71,38 @@ function getRectsFromAnnotation(annotation: any): [number, number, number, numbe
   const rects: [number, number, number, number][] = [];
 
   const quadPoints = annotation.quadPoints;
-  if (quadPoints && Array.isArray(quadPoints) && quadPoints.length > 0) {
-    if (Array.isArray(quadPoints[0])) {
+  // Convert TypedArrays (Float32Array, etc.) to regular arrays
+  const qp: any[] | null = quadPoints && quadPoints.length > 0
+    ? Array.from(quadPoints)
+    : null;
+
+  if (qp) {
+    if (Array.isArray(qp[0])) {
       // Array of arrays
-      for (const quad of quadPoints) {
+      for (const quad of qp) {
         if (quad.length >= 8) {
           if (typeof quad[0] === 'number') {
-            // Flat numbers: [x1,y1, x2,y2, x3,y3, x4,y4]
             const xs = [quad[0], quad[2], quad[4], quad[6]];
             const ys = [quad[1], quad[3], quad[5], quad[7]];
             rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
           } else if (quad[0] && typeof quad[0] === 'object' && 'x' in quad[0]) {
-            // Array of {x, y} objects
             const xs = quad.map((p: any) => p.x);
             const ys = quad.map((p: any) => p.y);
             rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
           }
         }
       }
-    } else if (typeof quadPoints[0] === 'number') {
+    } else if (typeof qp[0] === 'number') {
       // Flat array of numbers: [x1,y1, x2,y2, ..., x4,y4, x1,y1, ...]
-      for (let i = 0; i + 7 < quadPoints.length; i += 8) {
-        const xs = [quadPoints[i], quadPoints[i+2], quadPoints[i+4], quadPoints[i+6]];
-        const ys = [quadPoints[i+1], quadPoints[i+3], quadPoints[i+5], quadPoints[i+7]];
+      for (let i = 0; i + 7 < qp.length; i += 8) {
+        const xs = [qp[i], qp[i+2], qp[i+4], qp[i+6]];
+        const ys = [qp[i+1], qp[i+3], qp[i+5], qp[i+7]];
         rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
       }
-    } else if (typeof quadPoints[0] === 'object' && 'x' in quadPoints[0]) {
+    } else if (typeof qp[0] === 'object' && 'x' in qp[0]) {
       // Flat array of {x, y} objects, groups of 4
-      for (let i = 0; i + 3 < quadPoints.length; i += 4) {
-        const pts = quadPoints.slice(i, i + 4);
+      for (let i = 0; i + 3 < qp.length; i += 4) {
+        const pts = qp.slice(i, i + 4);
         const xs = pts.map((p: any) => p.x);
         const ys = pts.map((p: any) => p.y);
         rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
@@ -131,26 +134,57 @@ function extractMarkedTextFromContent(
     const tw = item.width || 0;
     const th = item.height || (Math.abs(item.transform[3]) || 12);
 
-    // Vertical midpoint of the text item
+    // Text item vertical extent
+    const textTop = ty + th;
+    const textBottom = ty;
     const textMidY = ty + th / 2;
 
-    for (const [rx1, ry1, rx2, ry2] of rects) {
-      // Require the text item's vertical midpoint to fall within the rect
-      // This prevents adjacent-line text from being captured
-      const midInsideY = textMidY >= ry1 && textMidY <= ry2;
+    // Find the best matching rect (closest vertically) to avoid
+    // matching a rect from a different line in multi-line annotations
+    let bestRect: [number, number, number, number] | null = null;
+    let bestVertDist = Infinity;
 
-      // Require meaningful horizontal overlap (not just touching)
+    for (const rect of rects) {
+      const [rx1, ry1, rx2, ry2] = rect;
+      const rectHeight = ry2 - ry1;
+
+      let verticalMatch: boolean;
+      if (rectHeight < th * 0.5) {
+        const rectMidY = (ry1 + ry2) / 2;
+        verticalMatch = rectMidY >= textBottom && rectMidY <= textTop;
+      } else {
+        verticalMatch = textMidY >= ry1 && textMidY <= ry2;
+      }
+
       const textRight = tx + tw;
       const overlapLeft = Math.max(tx, rx1);
       const overlapRight = Math.min(textRight, rx2);
-      const hOverlap = overlapRight - overlapLeft;
-      const overlapX = hOverlap > 0;
+      const overlapX = (overlapRight - overlapLeft) > 0;
 
-      if (midInsideY && overlapX) {
-        // If the text item only partially overlaps horizontally,
-        // we still include the full text item (PDF text items are atomic)
-        matchingItems.push({ text: item.str, x: tx, y: ty });
-        break;
+      if (verticalMatch && overlapX) {
+        const rectMidY = (ry1 + ry2) / 2;
+        const vertDist = Math.abs(textMidY - rectMidY);
+        if (vertDist < bestVertDist) {
+          bestVertDist = vertDist;
+          bestRect = rect;
+        }
+      }
+    }
+
+    if (bestRect) {
+      const [rx1, , rx2] = bestRect;
+      let text = item.str;
+      const textRight = tx + tw;
+      const hOverlap = Math.min(textRight, rx2) - Math.max(tx, rx1);
+      if (tw > 0 && (hOverlap < tw - 1)) {
+        const startFrac = Math.max(0, (rx1 - tx) / tw);
+        const endFrac = Math.min(1, (rx2 - tx) / tw);
+        const startChar = Math.round(startFrac * text.length);
+        const endChar = Math.floor(endFrac * text.length);
+        text = text.slice(startChar, endChar);
+      }
+      if (text.trim()) {
+        matchingItems.push({ text, x: Math.max(tx, rx1), y: ty });
       }
     }
   }
