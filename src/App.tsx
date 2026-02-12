@@ -1,8 +1,9 @@
-import { useCallback, useState, useEffect, useMemo } from 'react'
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react'
 import Navbar from './components/Navbar'
 import type { ViewMode } from './components/Navbar'
 import CommentsTable from './components/CommentsTable'
 import PdfViewer from './components/PdfViewer'
+import type { PdfViewerHandle } from './components/PdfViewer'
 import { saveAs } from 'file-saver'
 import { Container, Typography, Box, Button, Fab, Select, MenuItem, Checkbox, ListItemText, FormControl, InputLabel, OutlinedInput, Menu, Snackbar, Alert, ButtonGroup, IconButton, ThemeProvider, createTheme, CssBaseline, Popover, FormControlLabel, Badge, Tooltip } from '@mui/material'
 import { CloudUpload as CloudUploadIcon, KeyboardArrowUp as KeyboardArrowUpIcon, ArrowDropDown as ArrowDropDownIcon, ContentCopy as ContentCopyIcon, Save as SaveIcon, Clear as ClearIcon, FilterAlt as FilterAltIcon } from '@mui/icons-material'
@@ -19,6 +20,7 @@ interface CommentEntry {
   Comment: string;
   MarkedText: string;
   Modified: string;
+  rect?: [number, number, number, number]; // PDF coordinates [x1, y1, x2, y2]
 }
 
 function formatDate(ts?: string): string {
@@ -284,6 +286,7 @@ function App() {
   const [saveMenuAnchor, setSaveMenuAnchor] = useState<null | HTMLElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
+  const pdfViewerRef = useRef<PdfViewerHandle>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode');
@@ -624,6 +627,7 @@ function App() {
               Comment: contents.trim(),
               MarkedText: markedText,
               Modified: formatDate(mod),
+              rect: a.rect ? [a.rect[0], a.rect[1], a.rect[2], a.rect[3]] as [number, number, number, number] : undefined,
             });
           }
         }
@@ -746,13 +750,13 @@ function App() {
                 overflow: 'hidden',
               }}
             >
-              <PdfViewer pdfData={pdfData} fileName={fileName} />
+              <PdfViewer ref={pdfViewerRef} pdfData={pdfData} fileName={fileName} />
             </Box>
           )}
 
           {/* Table / Content Panel */}
-          <Box sx={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-          <Container maxWidth={viewMode === 'split' ? false : 'lg'} sx={{ pt: 0.5, pb: 2 }}>
+          <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <Container maxWidth={viewMode === 'split' ? false : 'lg'} sx={{ pt: 0.5, pb: 2, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
         {/* Filename display */}
         {file && (
@@ -845,8 +849,8 @@ function App() {
 
                 {/* Results Section */}
                 {file && (
-                  <Box sx={{ mt: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
                       <Typography variant="h6">
                         Found {filteredComments.length} annotation{filteredComments.length !== 1 ? 's' : ''}
                         {filteredComments.length !== comments.length
@@ -966,6 +970,13 @@ function App() {
                       loading={loading}
                       onSelectionChange={handleSelectionChange}
                       onCommentEdit={handleCommentEdit}
+                      onRowClick={(comment) => {
+                        if (viewMode === 'split' && pdfViewerRef.current) {
+                          // Look up the original comment (with rect) by No
+                          const original = comments.find(c => c.No === comment.No);
+                          pdfViewerRef.current.scrollToAnnotation(comment.Page, original?.rect);
+                        }
+                      }}
                       columnVisibility={columnVisibility}
                       setColumnVisibility={setColumnVisibility}
                     />

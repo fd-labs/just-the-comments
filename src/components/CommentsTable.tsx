@@ -20,6 +20,7 @@ interface CommentsTableProps {
   loading?: boolean;
   onSelectionChange?: (selectionModel: GridRowSelectionModel) => void;
   onCommentEdit?: (index: number, newComment: string) => void;
+  onRowClick?: (comment: CommentEntry) => void;
   columnVisibility: { [key: string]: boolean };
   setColumnVisibility: (vis: { [key: string]: boolean }) => void;
 }
@@ -142,7 +143,7 @@ const columns: GridColDef<CommentEntry>[] = [
   },
 ];
 
-export default function CommentsTable({ comments, loading = false, onSelectionChange, onCommentEdit, columnVisibility, setColumnVisibility }: CommentsTableProps) {
+export default function CommentsTable({ comments, loading = false, onSelectionChange, onCommentEdit, onRowClick, columnVisibility, setColumnVisibility }: CommentsTableProps) {
   // Inject global CSS to hide checkbox selection in column management
   useEffect(() => {
     const style = document.createElement('style');
@@ -190,7 +191,7 @@ export default function CommentsTable({ comments, loading = false, onSelectionCh
   }, [onCommentEdit]);
 
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ width: '100%', flex: 1, overflow: 'hidden' }}>
       <DataGrid
         rows={rowsWithId}
         columns={columns}
@@ -201,6 +202,7 @@ export default function CommentsTable({ comments, loading = false, onSelectionCh
         onColumnVisibilityModelChange={handleColumnVisibilityChange}
         processRowUpdate={processRowUpdate}
         disableRowSelectionOnClick
+        onRowClick={(params) => onRowClick?.(params.row as CommentEntry)}
         hideFooter
         disableVirtualization={false}
         columnVisibilityModel={columnVisibility}
