@@ -1,6 +1,8 @@
 import { useCallback, useState, useEffect, useMemo } from 'react'
 import Navbar from './components/Navbar'
+import type { ViewMode } from './components/Navbar'
 import CommentsTable from './components/CommentsTable'
+import PdfViewer from './components/PdfViewer'
 import { saveAs } from 'file-saver'
 import { Container, Typography, Box, Button, Fab, Select, MenuItem, Checkbox, ListItemText, FormControl, InputLabel, OutlinedInput, Menu, Snackbar, Alert, ButtonGroup, IconButton, ThemeProvider, createTheme, CssBaseline, Popover, FormControlLabel, Badge, Tooltip } from '@mui/material'
 import { CloudUpload as CloudUploadIcon, KeyboardArrowUp as KeyboardArrowUpIcon, ArrowDropDown as ArrowDropDownIcon, ContentCopy as ContentCopyIcon, Save as SaveIcon, Clear as ClearIcon, FilterAlt as FilterAltIcon } from '@mui/icons-material'
@@ -280,6 +282,8 @@ function App() {
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [copyMenuAnchor, setCopyMenuAnchor] = useState<null | HTMLElement>(null);
   const [saveMenuAnchor, setSaveMenuAnchor] = useState<null | HTMLElement>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode');
@@ -509,6 +513,8 @@ function App() {
     setSelectedRows([]);
     setSelectedTypes(new Set());
     setHasCommentOnly(false);
+    setPdfData(null);
+    setViewMode('table');
     // Keep column visibility settings intact
   }, []);
 
@@ -523,7 +529,8 @@ function App() {
 
     try {
       const data = await file.arrayBuffer();
-      const loadingTask = (pdfjsLib as any).getDocument({ data });
+      setPdfData(data.slice(0));
+      const loadingTask = (pdfjsLib as any).getDocument({ data: data.slice(0) });
       const pdf = await loadingTask.promise;
 
       const found: CommentEntry[] = [];
@@ -721,11 +728,31 @@ function App() {
           darkMode={darkMode} 
           onToggleDarkMode={toggleDarkMode}
           onUploadClick={handleClick}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          hasFile={!!file && !loading}
         />
 
-        {/* Main Content - Scrollable */}
-        <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-          <Container maxWidth="lg" sx={{ pt: 0.5, pb: 2 }}>
+        {/* Main Content */}
+        <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex' }}>
+          {/* PDF Viewer Panel */}
+          {viewMode === 'split' && pdfData && file && !loading && (
+            <Box
+              sx={{
+                width: '50%',
+                minWidth: 300,
+                borderRight: 1,
+                borderColor: 'divider',
+                overflow: 'hidden',
+              }}
+            >
+              <PdfViewer pdfData={pdfData} fileName={fileName} />
+            </Box>
+          )}
+
+          {/* Table / Content Panel */}
+          <Box sx={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+          <Container maxWidth={viewMode === 'split' ? false : 'lg'} sx={{ pt: 0.5, pb: 2 }}>
 
         {/* Filename display */}
         {file && (
@@ -981,7 +1008,54 @@ function App() {
 
       </Container>
 
-      {/* Scroll to top button */}
+      {/* Footer */}
+      {!file && (
+      <Box
+        component="footer"
+        sx={{
+          mt: 8,
+          py: 3,
+          px: 2,
+          backgroundColor: 'background.paper'
+        }}
+      >
+        <Container maxWidth="md">
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="body2" color="textSecondary">
+              Made with ❤️ by{' '}
+              <Box
+                component="a"
+                href="https://github.com/fd-labs"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  color: 'primary.main',
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' }
+                }}
+              >
+                Flow Direction Labs
+              </Box>
+              {' • '}
+              <Box
+                component="a"
+                href="https://github.com/fd-labs/just-the-comments"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  color: 'primary.main',
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' }
+                }}
+              >
+                View Source
+              </Box>
+            </Typography>
+          </Box>
+        </Container>
+      </Box>
+      )}
+      </Box>
       {showScrollTop && (
         <Fab
           color="primary"
@@ -1034,51 +1108,6 @@ function App() {
         </Alert>
       </Snackbar>
 
-      {/* Footer */}
-      <Box
-        component="footer"
-        sx={{
-          mt: 8,
-          py: 3,
-          px: 2,
-          backgroundColor: 'background.paper'
-        }}
-      >
-        <Container maxWidth="md">
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="textSecondary">
-              Made with ❤️ by{' '}
-              <Box
-                component="a"
-                href="https://github.com/fd-labs"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  color: 'primary.main',
-                  textDecoration: 'none',
-                  '&:hover': { textDecoration: 'underline' }
-                }}
-              >
-                Flow Direction Labs
-              </Box>
-              {' • '}
-              <Box
-                component="a"
-                href="https://github.com/fd-labs/just-the-comments"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  color: 'primary.main',
-                  textDecoration: 'none',
-                  '&:hover': { textDecoration: 'underline' }
-                }}
-              >
-                View Source
-              </Box>
-            </Typography>
-          </Box>
-        </Container>
-      </Box>
       </Box>
       </Box>
     </ThemeProvider>

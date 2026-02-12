@@ -4,19 +4,27 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
+import Tooltip from '@mui/material/Tooltip';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import ChatIcon from '@mui/icons-material/Chat';
 import BedtimeIcon from '@mui/icons-material/Bedtime';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import DescriptionIcon from '@mui/icons-material/Description';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+
+export type ViewMode = 'table' | 'split';
 
 interface NavbarProps {
   darkMode: boolean;
   onToggleDarkMode: () => void;
   onUploadClick: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  hasFile: boolean;
 }
 
-export default function Navbar({ darkMode, onToggleDarkMode, onUploadClick }: NavbarProps) {
+export default function Navbar({ darkMode, onToggleDarkMode, onUploadClick, viewMode, onViewModeChange, hasFile }: NavbarProps) {
   return (
     <Box>
       <AppBar 
@@ -66,6 +74,32 @@ export default function Navbar({ darkMode, onToggleDarkMode, onUploadClick }: Na
             <Typography variant="body2" sx={{ ml: 1, opacity: 0.7 }}>
               (or drag &amp; drop a PDF anywhere)
             </Typography>
+            {hasFile && (
+              <Tooltip title={viewMode === 'split' ? 'Hide PDF' : 'Show PDF'}>
+                <Button
+                  variant={viewMode === 'split' ? 'contained' : 'outlined'}
+                  size="small"
+                  startIcon={viewMode === 'split' ? <VisibilityOffIcon /> : <DescriptionIcon />}
+                  onClick={() => onViewModeChange(viewMode === 'split' ? 'table' : 'split')}
+                  sx={{
+                    ml: 2,
+                    color: 'white',
+                    borderColor: 'white',
+                    '&:hover': {
+                      borderColor: 'white',
+                      backgroundColor: viewMode === 'split'
+                        ? 'rgba(255, 255, 255, 0.3)'
+                        : 'rgba(255, 255, 255, 0.1)',
+                    },
+                    ...(viewMode === 'split' && {
+                      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    }),
+                  }}
+                >
+                  {viewMode === 'split' ? 'Hide PDF' : 'Show PDF'}
+                </Button>
+              </Tooltip>
+            )}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
             <Box component="span" sx={{ mr: 0.5 }}>🔒</Box>
