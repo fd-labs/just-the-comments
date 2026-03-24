@@ -202,58 +202,6 @@ function extractMarkedTextFromContent(
   return matchingItems.map(item => item.text).join(' ').replace(/\s+/g, ' ').trim();
 }
 
-// Column selector component
-function ColumnSelector({ columnVisibility, setColumnVisibility }: {
-  columnVisibility: { [key: string]: boolean },
-  setColumnVisibility: (vis: { [key: string]: boolean }) => void
-}) {
-  const selectedColumns = Object.keys(columnVisibility).filter(key => columnVisibility[key]);
-
-  const handleChange = (event: any) => {
-    const value = event.target.value;
-    const newVisibility = { ...columnVisibility };
-
-    // Reset all to false
-    Object.keys(newVisibility).forEach(key => {
-      newVisibility[key] = false;
-    });
-
-    // Set selected ones to true
-    value.forEach((field: string) => {
-      newVisibility[field] = true;
-    });
-
-    // Always ensure "Comment" column is selected
-    newVisibility.Comment = true;
-
-    setColumnVisibility(newVisibility);
-  };
-
-  return (
-    <FormControl size="small" sx={{ minWidth: 160 }}>
-      <InputLabel>Columns</InputLabel>
-      <Select
-        multiple
-        autoWidth
-        value={selectedColumns}
-        onChange={handleChange}
-        input={<OutlinedInput label="Columns" />}
-        renderValue={(selected) => `${selected.length - 1} selected`}
-      >
-        {COLUMN_FIELDS.map((field) => (
-          <MenuItem key={field} value={field} disabled={field === 'Comment'}>
-            <Checkbox
-              checked={selectedColumns.indexOf(field) > -1}
-              disabled={field === 'Comment'}
-            />
-            <ListItemText primary={COLUMN_LABELS[field] || field} />
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  );
-}
-
 // Type filter component
 const DEFAULT_COLUMNS = {
   No: true,
@@ -735,6 +683,8 @@ function App() {
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           hasFile={!!file && !loading}
+          fileName={fileName}
+          onUnloadFile={unloadFile}
         />
 
         {/* Main Content */}
@@ -756,32 +706,7 @@ function App() {
 
           {/* Table / Content Panel */}
           <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <Container maxWidth={viewMode === 'split' ? false : 'lg'} sx={{ pt: 0.5, pb: 2, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-
-        {/* Filename display */}
-        {file && (
-          <Box sx={{ mt: 2, textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" color="textSecondary">
-              {fileName}
-            </Typography>
-            <IconButton
-              size="small"
-              onClick={unloadFile}
-              title="Clear file"
-              sx={{ 
-                p: 0.5,
-                color: 'error.light',
-                opacity: 0.7,
-                '&:hover': {
-                  opacity: 1,
-                  backgroundColor: 'rgba(211, 47, 47, 0.08)',
-                },
-              }}
-            >
-              <ClearIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        )}
+          <Container maxWidth={viewMode === 'split' ? false : 'lg'} sx={{ pt: 2, pb: 2, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
         {loading ? (
           /* Loading State - only affects content area below toolbar */
@@ -849,7 +774,7 @@ function App() {
 
                 {/* Results Section */}
                 {file && (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', padding: "5px" }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
                       <Typography variant="h6">
                         Found {filteredComments.length} annotation{filteredComments.length !== 1 ? 's' : ''}
@@ -862,7 +787,7 @@ function App() {
                           : ''
                         }
                       </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {/* <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Tooltip title="Filters">
                         <IconButton
                           onClick={(e) => setFilterAnchor(e.currentTarget)}
@@ -887,7 +812,7 @@ function App() {
                                 onChange={(e) => setHasCommentOnly(e.target.checked)}
                               />
                             }
-                            label="Has comment only"
+                            label="Has comment"
                           />
                           <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, color: 'text.secondary' }}>
                             Annotation types
@@ -915,10 +840,6 @@ function App() {
                           ))}
                         </Box>
                       </Popover>
-                      <ColumnSelector
-                        columnVisibility={columnVisibility}
-                        setColumnVisibility={setColumnVisibility}
-                      />
                       <ButtonGroup variant="outlined" sx={{ height: 40 }}>
                         <Tooltip title="Copy">
                           <Button
@@ -963,7 +884,7 @@ function App() {
                           Save as CSV file
                         </MenuItem>
                       </Menu>
-                      </Box>
+                      </Box> */}
                     </Box>
                     <CommentsTable
                       comments={filteredComments}

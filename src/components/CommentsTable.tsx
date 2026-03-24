@@ -80,18 +80,21 @@ const columns: GridColDef<CommentEntry>[] = [
   {
     field: 'No',
     headerName: 'No.',
-    width: 100,
+    width: 80,
     type: 'number',
+    disableColumnMenu: true
   },
   { 
     field: 'Page', 
-    width: 100,
-    type: 'number'
+    width: 80,
+    type: 'number',
+    disableColumnMenu: true
   },
   {
     field: 'Type',
     headerName: 'Type',
     width: 130,
+    disableColumnMenu: true
   },
   {
     field: 'MarkedText',
@@ -107,6 +110,7 @@ const columns: GridColDef<CommentEntry>[] = [
         {params.value}
       </Box>
     ),
+    disableColumnMenu: true
   },
   {
     field: 'Comment',
@@ -114,6 +118,7 @@ const columns: GridColDef<CommentEntry>[] = [
     minWidth: 300,
     hideable: false,
     editable: true,
+    disableColumnMenu: true,
     renderEditCell: (params) => <MultilineEditCell {...params} />,
     renderHeader: () => (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -136,10 +141,12 @@ const columns: GridColDef<CommentEntry>[] = [
   {
     field: 'Author',
     width: 150,
+    disableColumnMenu: true
   },
   {
     field: 'Modified',
     width: 180,
+    disableColumnMenu: true
   },
 ];
 
@@ -198,6 +205,7 @@ export default function CommentsTable({ comments, loading = false, onSelectionCh
         loading={loading}
         getRowHeight={() => 'auto'}
         checkboxSelection
+        showToolbar={true}
         onRowSelectionModelChange={handleSelectionChange}
         onColumnVisibilityModelChange={handleColumnVisibilityChange}
         processRowUpdate={processRowUpdate}

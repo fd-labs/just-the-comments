@@ -158,7 +158,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
 
     if (!rect) {
       // No rect — just scroll to the page
-      canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      canvas.scrollIntoView({ block: 'start' });
       return;
     }
 
@@ -181,7 +181,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       const canvasTop = canvas.offsetTop;
       const targetY = canvasTop + yFromTop - scrollContainer.clientHeight / 3;
 
-      scrollContainer.scrollTo({ top: targetY, behavior: 'smooth' });
+      scrollContainer.scrollTo({ top: targetY });
 
       // Remove any existing highlight immediately
       if (activeHighlightRef.current) {
@@ -219,7 +219,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       activeHighlightRef.current = { el: highlight, fadeTimer, removeTimer };
     } catch (err) {
       // Fallback: just scroll to the page
-      canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      canvas.scrollIntoView({ block: 'start' });
     }
   }, [pdf, scale]);
 
@@ -271,7 +271,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
             </span>
           </Tooltip>
           <Tooltip title="Fit to width">
-            <IconButton size="small" onClick={zoomFit}>
+            <IconButton size="small" onClick={zoomFit}>s 
               <FitScreenIcon fontSize="small" />
             </IconButton>
           </Tooltip>
