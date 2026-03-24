@@ -111,6 +111,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
             canvas.style.width = `${Math.floor(viewport.width)}px`;
             canvas.style.height = `${Math.floor(viewport.height)}px`;
             canvas.style.display = 'block';
+            canvas.style.marginLeft = 'auto';
+            canvas.style.marginRight = 'auto';
             canvas.style.marginBottom = '8px';
             canvas.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
 
@@ -271,7 +273,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
             </span>
           </Tooltip>
           <Tooltip title="Fit to width">
-            <IconButton size="small" onClick={zoomFit}>s 
+            <IconButton size="small" onClick={zoomFit}>
               <FitScreenIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -291,10 +293,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
         sx={{
           flex: 1,
           overflow: 'auto',
-          overflowY: 'scroll', // Always show scrollbar to prevent layout shifts
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
+          overflowY: 'scroll',
           p: 2,
           backgroundColor: (theme) =>
             theme.palette.mode === 'dark' ? 'grey.900' : 'grey.200',
